@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="utf-8">
+<script type="text/javascript" src="lib/echarts.4.1.0.min.js"></script>
+<script type="text/javascript" src="lib/jquery-3.3.1.min.js"></script>
+<!--script type="text/javascript" src="https://cdn.rawgit.com/ecomfe/echarts/4.1.0.rc2/dist/echarts.js"></script-->
+<!--script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script-->
+<script type="text/javascript">
+function listFiles(){
+ var folder = "csv/";
+ $.ajax({
+     url : folder,
+     success: function (data) {
+        var selectNext=1;
+        var options="";
+        $(data).find("a").attr("href", function (i, val) {
+            if( val.match(/\.csv$/) ) {
+                if (selectNext==1){
+                 options=options+"<option value=\""+ folder + val +"\" selected>" + val + "</option>";
+                 selectNext=0;
+                }else{
+                 options=options+"<option value=\""+ folder + val +"\">" + val + "</option>";
+                }
+            }
+        });
+        $("body").append("<select id=\"fileListSelect\" onchange=\"runAnalysis()\">" + options + "</select><div id=\"debugConsole\"></div><div id=\"chart\" style=\"width: 100%; height: 600px;\"></div>");
+        if (selectNext==1){
+         document.getElementById("debugConsole").innerHTML="<br/>No csv files to process found in csv/ directory.<br/>Please add *.csv files to csv directory<br/>";
+        }else{
+         //issues seen with scrolling when running runAnalysis more than once
+         //issues seen without runAnalysis when only one csv file
+         //runAnalysis();
+         document.getElementById("debugConsole").innerHTML="<br/>Please pick csv file for analysis<br/>";
+        }
+     }
+ });
+}
+
+function runAnalysis(){
+ var debugConsole=document.getElementById("debugConsole");
+ var selectForm=document.getElementById("fileListSelect");
+ var selecedOption=selectForm.options[selectForm.selectedIndex].value;
+
+ debugConsole.innerHTML="<br/>" + selecedOption + "<br/>";
+ plotChart(selecedOption);
+}
+
+function plotChart (csvFile) {
+
+   //------------------------------------------
+   //sortByKey to sort json by key
+   function sortByKey(array, key) {
+    return array.sort(function(a, b) {
+     var x = a[key]; var y = b[key];
+     return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+    });
+   }
+
+   //------------------------------------------
+   //getJsonFromCSV to get json from csv
+   function getJsonFromCSV(csv) {
+    var jsonDataObj = null;
+    var csvValues = [];
+    var csvDatasets = [];
+    var csvColumnNames = csvLines = csvLineValues = [];
+    csvLines = csv.split(/[\r?\n|\r|\n]+/);
+
+    // assuming 1st line as column names
+    if (csvLines[0].length > 0) {
+     csvColumnNames = csvLines[0].split(",");
+    }
+    //console.log(csvColumnNames.length);
+    //console.log(csvColumnNames);
+
+    for (var j = 1; j < csvColumnNames.length; j++) {
+     csvValues[j]=[];
+    }
+
+    //assuming 1st column for timestamp in format ...
+    for (var i = 1; i < csvLines.length; i++) {
+     if (csvLines[i].length > 0) {
+      lineValues = csvLines[i].split(",");
+      for (var j = 1; j < csvColumnNames.length; j++) {
+       if  ( !isNaN(lineValues[j]) ){
+        csvValues[j].push([ Date.parse(lineValues[0]), parseFloat(lineValues[j]) ]);
+       }else{
+        csvValues[j].push([ Date.parse(lineValues[0]), null ]);
+       }
+      }
+     }
+    }
+
+    for (var j = 1; j < csvColumnNames.length; j++) {
+     csvDatasets.push({
+      name : csvColumnNames[j],
+      animation: false,
+      showSymbol: false,
+      type : 'line',
+      data : csvValues[j]
+     })
+    }
+
+    jsonDataObj = {
+     seriesnames : csvColumnNames.sort(),
+     seriesdata : sortByKey(csvDatasets,"name")
+    }
+
+    return jsonDataObj;
+   }
+
+   $.get(csvFile, function(data) {
+    //console.log(data);
+    //console.log(getJsonFromCSV(data));
+    
+    var json = getJsonFromCSV(data);
+    var seriesselected = {};
+
+    for (var j = 0; j < json['seriesnames'].length; j++) {
+     seriesselected[json['seriesnames'][j]] = false;
+    }
+
+    var cfg = {
+     title: {
+        text: csvFile,
+        //subtext: 'plot based on csv data from VIZ',
+        x: 'center',
+        align: 'right'
+     },
+     toolbox: {
+      right: 'auto',
+      feature: { 
+       dataZoom: { yAxisIndex: 'none' },
+       restore: {},
+       saveAsImage: {}
+      }
+     },
+     grid: {
+      borderWidth: 1,
+      borderColor: '#000',
+      height: '450px',
+      x: 350,
+      x2: 5,
+      y: 20,
+      y2: 20
+     },
+     legend: {
+      //  orient: 'horizontal', // 'vertical'
+      //  x: 'right', // 'center' | 'left' | {number},
+      //  y: 'top', // 'center' | 'bottom' | {number}
+
+      type: 'plain',
+      //type: 'scroll',
+      //pageButtonGap: 5,
+      //pageButtonPosition: 'start',
+      //animation: false,
+      //orient: 'vertical',
+      //show: true,
+      //borderColor: '#ccc',
+      //borderWidth: 0,
+      //left: 2,
+      //top: 10,
+      //bottom: 20,
+      //itemGap: 1,
+      //itemWidth: 1,
+      //itemHeight: 1,
+      //textStyle: { fontSize: 11 },
+      data: json['seriesnames'],
+     },
+     xAxis: {
+      type: 'time',
+      min: 'dataMin',
+      max: 'dataMax',
+      splitLine: { show: true }
+     },
+     yAxis: {
+      type: 'value',
+      min: 'dataMin',
+      max: 'dataMax',
+      splitLine: { show: true }
+     },
+     series: json['seriesdata'],
+     selected: seriesselected
+    }
+
+    var myChart = echarts.init(document.getElementById('chart'));
+    myChart.setOption(cfg);
+    // some buggy behaviour, need to re-set some options to get scrolling
+    myChart.setOption({legend : { type: 'scroll', orient: 'vertical', left: 2, top: 10, bottom: 20, selected: seriesselected }});
+    console.log('DONE');
+
+   });
+  }
+</script>
+
+</head>
+
+<body onload="listFiles();">
+
+</body>
+
+</html>

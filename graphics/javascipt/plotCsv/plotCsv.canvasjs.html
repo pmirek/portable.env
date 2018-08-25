@@ -1,0 +1,130 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <script type="text/javascript" src="lib/jquery-3.3.1.min.js"></script>
+  <script type="text/javascript" src="lib/canvasjs.2.2.min.js"></script>
+  <!--script type="text/javascript" src="http://canvasjs.com/assets/script/jquery-1.11.1.min.js"></script-->
+  <!--script type="text/javascript" src="http://canvasjs.com/assets/script/canvasjs.min.js"></script-->
+  <script type="text/javascript">
+  window.onload = function () {
+
+   //------------------------------------------
+   //sortByKey to sort json by key
+   function sortByKey(array, key) {
+    return array.sort(function(a, b) {
+     var x = a[key]; var y = b[key];
+     return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+    });
+   }
+
+   //------------------------------------------
+   //getJsonFromCSV to get json from csv
+   function getJsonFromCSV(csv) {
+    var jsonDataObj = null;
+    var csvColumnNames = csvLines = lineValues = [];
+    var csvValues = [];
+    var csvDatasets = [];
+    csvLines = csv.split(/[\r?\n|\r|\n]+/);
+
+    // assuming 1st line as column names
+    if (csvLines[0].length > 0) {
+     csvColumnNames = csvLines[0].split(",");
+    }
+    //console.log(csvColumnNames.length);
+    //console.log(csvColumnNames);
+
+    for (var j = 1; j < csvColumnNames.length; j++) {
+     csvValues[j]=[];
+    }
+
+    //assuming 1st column for timestamp in format ...
+    for (var i = 1; i < csvLines.length; i++) {
+     if (csvLines[i].length > 0) {
+      lineValues = csvLines[i].split(",");
+      for (var j = 1; j < csvColumnNames.length; j++) {
+       if  ( !isNaN(lineValues[j]) ){
+        csvValues[j].push({
+         x : Date.parse(lineValues[0]),
+         y : parseFloat(lineValues[j]) 
+        })
+       }else{
+        csvValues[j].push({
+         x : Date.parse(lineValues[0]),
+         y : null 
+        })
+       }
+      }
+     }
+    }
+
+    for (var j = 1; j < csvColumnNames.length; j++) {
+     csvDatasets.push({
+       type : "line",
+       xValueType : "dateTime",
+       name : csvColumnNames[j],
+       visible : false,
+       showInLegend : true,
+       indexLabelFontSize : 12,
+       dataPoints : csvValues[j]
+     })
+    }
+
+    jsonDataObj = {
+     data : sortByKey(csvDatasets,"name")
+    }
+
+    //console.log(JSON.stringify(jsonDataObj));
+    return jsonDataObj;
+   }
+
+   //------------------------------------------
+   //main 
+   $.get("csv/sample1.csv", function(data) {
+    //console.log(data);
+    //console.log(getJsonFromCSV(data));
+    var json = getJsonFromCSV(data);
+
+    var chart = new CanvasJS.Chart("chartContainer", {
+     exportEnabled: true,
+     zoomEnabled: true, 
+     title: {
+      fontSize: 15, 
+      text: "Sample of TDS data from VIZ /click on legend item to hide/unhide data"
+     },
+     legend: {
+      cursor: "pointer",
+      horizontalAlign: "left",
+      fontSize: 10,
+      itemclick: function (e) {
+       //console.log("legend click: " + e.dataPointIndex);
+       //console.log(e);
+       if (typeof (e.dataSeries.visible) === "undefined" || e.dataSeries.visible) {
+        e.dataSeries.visible = false;
+       } else {
+        e.dataSeries.visible = true;
+       }
+       e.chart.render();
+      }
+     },
+     axisX:{
+      title: "Date",
+      titleFontSize: 12,
+      labelFontSize: 12
+     },
+     axisY:{
+      title: "Exist Time",
+      titleFontSize: 12,
+      labelFontSize: 12
+     },
+     data: json["data"]
+    });
+
+    chart.render();
+   });
+  }
+  </script>
+<body>
+  <div id="chartContainer" style="height: 600px; width: 100%;">
+  </div>
+</body>
+</html>
